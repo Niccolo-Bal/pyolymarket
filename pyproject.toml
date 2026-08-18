@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=48", "setuptools_scm[toml]>=6.3.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyolymarket"
+description = "Python wrapper for the Polymarket API with embedding-based event search"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.12"
+dynamic = ["version"]
+dependencies = [
+    "requests",
+    "urllib3",
+    "numpy",
+    "pandas",
+    "openai",
+    "scikit-learn",
+    "sentence-transformers",
+    "alive-progress",
+    "ddgs",
+]
+
+[project.optional-dependencies]
+docs = [
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings-python",
+]
+
+tests = [
+  "pytest>=8,<9",
+  "pytest-sugar>=0.9.6",
+]
+
+[project.urls]
+Documentation = "https://github.com/Niccolo-Bal/pyolymarket"
+Issues = "https://github.com/Niccolo-Bal/pyolymarket"
+Source = "https://github.com/Niccolo-Bal/pyolymarket"
+
+[tool.setuptools.packages.find]
+include = ["pyolymarket", "pyolymarket.*"]
+where = ["src"]
+namespaces = false
+
+[tool.setuptools_scm]

@@ -1,0 +1,23 @@
+# Caches (all three spellings that have appeared in this project)
+__pyolymarket_cache__/
+__pyolymarket_cahce__/
+pyolymarket_cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+.pytest_cache/
+
+# Build artifacts
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Docs
+site/
