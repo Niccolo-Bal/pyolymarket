@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import os, json
-from config import config
+from .config import config
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 
@@ -29,6 +29,7 @@ def embedList(texts : list[str]) -> tuple[list[np.ndarray[float]], int]:
         input = texts, model = embedder)
     
     if response.usage.total_tokens > 10 ** 5:
+        # TODO: Remove print, replace with log or remove entirely
         print(f"Warning: large embedding request ({response.usage.total_tokens}). Make sure this was not sent in error.")
 
     return [item.embedding for item in response.data], response.usage.total_tokens

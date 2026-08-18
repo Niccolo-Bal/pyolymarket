@@ -1,15 +1,14 @@
 import re
 import numpy as np
+import pandas as pd
 from ddgs import DDGS
+from .custom_exceptions import EmbeddingError
+from . import embedding_logic as emb
+from .polyclasses import Event, Market
+from .config import config
 
-import embedding_logic as emb
-from polyclasses import Event, Market
-from config import config
-if config.caching:
-    from cacher import events, events_vecs
-
-
-def ddgSearchEvent(query : str, depth : int = 10, max_results : int = 1) -> Event | list[Event]: # Works well, inconsistent
+# Works better than embedded search but inconsistent
+def ddgSearchEvent(query : str, depth : int = 10, max_results : int = 1) -> Event | list[Event]: 
     
     if max_results < 1: 
         raise ValueError("max_results must be a positive value") 
@@ -41,7 +40,16 @@ def ddgSearchEvent(query : str, depth : int = 10, max_results : int = 1) -> Even
     return None
 
 
-def embeddedSearchEvent(query : str, results : int = 1) -> Event | list[Event]: # Fallback allways return result
+# Embedded searches through cached embedded list of Events.
+def embeddedSearchEvent(query : str, results : int = 1, data : pd.DataFrame | None = None) -> Event | list[Event]: # Fallback allways return result
+
+    if not config.caching:
+        raise EmbeddingError("Cannot do embedded search while caching is disabled. "
+                             "Set pyoly.config.cache = True")
+
+    if data is None:
+        from .cacher import events, events_vecs
+        # TODO: Add functionality for custom db
 
     if results < 1: 
         raise ValueError("results must be a positive value")

@@ -1,45 +1,37 @@
-import embedding_logic as emb
-import polyclasses as poly
-import asyncio, requests, json, os, logging, re
+import asyncio, json, os, logging, re
 import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
-from datetime import datetime
-from sentence_transformers import SentenceTransformer, util
 from alive_progress import alive_bar
-from config import config
 
-# Final child file before Bot_Logic/main.py. Contains functions for caching data and searching for events.
+from . import _client
+from . import embedding_logic as emb
+from . import polyclasses as poly
+from .config import config
 
-config.caching = True
+def cache():
 
-def cacheMarkets(log: bool = False):
-
-    if log:
+    if config.log:
         logging.basicConfig(level = logging.INFO, force = True)
 
-    logger.info("Starting cache sequence")
+    logger.info(" Starting cache sequence")
 
     markets = []
     params = {"limit" : 100, "end_date_min" : datetime.today().strftime("%Y-%m-%d")}
     next_cursor = None
 
-    with alive_bar(title = "Pulling Market Data", disable = not log) as bar: 
-        with requests.Session() as session:
-            logger.info("Established connection to gamma API.")
+    with alive_bar(title = "Pulling Market Data", disable = not config.log) as bar: 
+        with _client.new_session() as session:
+            logger.info(" Established connection to gamma API.")
             while True:
 
                 if next_cursor:
                     params["after_cursor"] = next_cursor
 
-                response = session.get("https://gamma-api.polymarket.com/markets/keyset", 
-                                        params = params)
-                batch = response.json()
-                
-                if "type" in batch:
-                    raise ValueError(f"Error in API request: {batch["type"]}")
-                    
+                batch = _client.get_json("markets/keyset",
+                                         params = params, sess = session)
+
                 markets.extend(batch["markets"])
 
                 next_cursor = batch.get("next_cursor")
@@ -77,7 +69,7 @@ def cacheMarkets(log: bool = False):
     embedding_df = new_events[["shortenedDesc"]].drop_duplicates()
     embedding_list = embedding_df["shortenedDesc"].to_list()
     vectorized_list, tokens = emb.embedList(embedding_list) 
-    logger.info(f"Succesfully embeded new events. Tokens used: {tokens}")
+    logger.info(f" Succesfully embeded new events. Tokens used: {tokens}")
     embedding_df["embeddedVector"] = vectorized_list
 
     new_events = pd.merge(new_events, embedding_df, on = "shortenedDesc")
@@ -86,42 +78,48 @@ def cacheMarkets(log: bool = False):
     ## Markets Logic
     # TODO: Markets Logic; mirror events logic
 
-    markets_df.to_csv("cache/markets.csv", index = False)
-    markets_df.to_parquet("cache/markets.parquet", index = False)
+    markets_df.to_csv(config.CACHE_DIR + "/markets.csv", index = False)
+    markets_df.to_parquet(config.CACHE_DIR + "/markets.parquet", index = False)
     
     events_vecs = np.stack(final_events_df["embeddedVector"].to_numpy())
     events = final_events_df
-    events.to_csv("cache/events.csv", index = False)
-    events.to_parquet("cache/events.parquet", index = False)
-    np.save("cache/events_vecs.npy", events_vecs)
+    events.to_csv(config.CACHE_DIR + "/events.csv", index = False)
+    events.to_parquet(config.CACHE_DIR + "/events.parquet", index = False)
+    np.save(config.CACHE_DIR + "/events_vecs.npy", events_vecs)
 
-    logger.info("Succesfully refreshed markets and events.")
+    logger.info(" Succesfully refreshed markets and events.")
 
     logging.basicConfig(level = logging.CRITICAL, force = True)
 
 
 async def cacheLoop():
-    cacheMarkets()
+    cache()
     await asyncio.sleep(9000)
 
 ###### File initializations
 
-if config.caching:
-    os.chdir(Path(__file__).resolve().parent)
-    logging.basicConfig(level = logging.CRITICAL)
-    logger = logging.getLogger(__name__)
+logging.basicConfig(level = logging.CRITICAL)
+logger = logging.getLogger(__name__)
+
+if config._caching != "off":
 
     try:
-        events = pd.read_parquet("cache/events.parquet")
-        events_vecs = np.load("cache/events_vecs.npy")
-    except FileNotFoundError:
+        events = pd.read_parquet(config.CACHE_DIR + "/events.parquet")
+        events_vecs = np.load(config.CACHE_DIR + "/events_vecs.npy")
+    except (FileNotFoundError, OSError):
+        if not os.path.exists(config.CACHE_DIR):
+            os.makedirs(config.CACHE_DIR)
         print(".npy or parquet not found. Refreshing markets.")
-        cacheMarkets()
-        events = pd.read_parquet("cache/events.parquet")
-        events_vecs = np.load("cache/events_vecs.npy")
+        cache()
+        events = pd.read_parquet(config.CACHE_DIR + "/events.parquet")
+        events_vecs = np.load(config.CACHE_DIR + "/events_vecs.npy")
         print("Makets refreshed.")
 
 ######
 
 if __name__ == "__main__":
-    pass
+    if not os.path.exists(config.CACHE_DIR):
+        os.makedirs(config.CACHE_DIR)
+    config.caching = True
+    config.log = True
+    cache()

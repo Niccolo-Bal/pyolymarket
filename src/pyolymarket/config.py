@@ -2,8 +2,9 @@ import os
 
 class Config:
     API_KEY_ENV =  "OPENAI_API_KEY"
-    caching = False
-    
+    _caching = "off"
+    log = False
+    CACHE_DIR = os.getcwd() + "/pyolymarket_cache"
 
     @property
     def api_key(self):
@@ -14,5 +15,11 @@ class Config:
                 "API key is proppery set up before using embedding features. "
                 "Change with pyolymarket.config.API_KEY_ENV.")
         return key
+
+    def set_cache_level(self, level: str):
+        if level not in ["off", "on", "csv", "npy"]:
+            raise ValueError(f'Unrecongnized level argument: {level}.' 
+                             'level must be "off", "on", "csv" or "npy"')
+        self._caching = level
 
 config = Config() 

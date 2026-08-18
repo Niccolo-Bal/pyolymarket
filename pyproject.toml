@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dynamic = ["version"]
 dependencies = [
     "requests",
+    "urllib3",
     "numpy",
     "pandas",
     "openai",
@@ -33,12 +34,12 @@ tests = [
 ]
 
 [project.urls]
-Documentation = "TODO"
-Issues = "TODO"
-Source = "TODO"
+Documentation = "https://github.com/Niccolo-Bal/pyolymarket"
+Issues = "https://github.com/Niccolo-Bal/pyolymarket"
+Source = "https://github.com/Niccolo-Bal/pyolymarket"
 
 [tool.setuptools.packages.find]
-exclude = ["tests", "tests.*"]
+include = ["pyolymarket", "pyolymarket.*"]
 where = ["src"]
 namespaces = false
 
