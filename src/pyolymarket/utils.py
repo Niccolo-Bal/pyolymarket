@@ -7,6 +7,10 @@ from . import embedding_logic as emb
 from .polyclasses import Event, Market
 from .config import config
 
+# Cannonical Polymarket Searches
+
+
+
 # Works better than embedded search but inconsistent
 def ddgSearchEvent(query : str, depth : int = 10, max_results : int = 1) -> Event | list[Event]: 
     
@@ -38,7 +42,6 @@ def ddgSearchEvent(query : str, depth : int = 10, max_results : int = 1) -> Even
         return search_events
     
     return None
-
 
 # Embedded searches through cached embedded list of Events.
 def embeddedSearchEvent(query : str, results : int = 1, data : pd.DataFrame | None = None) -> Event | list[Event]: # Fallback allways return result

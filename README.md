@@ -1,3 +1,23 @@
-## Pyolymarket ![Alt Text](media/pyoly-logo.png)
+<p align="center"> <img src="media/pyoly-logo.png" width="60" height="50" /> </p> 
 
-https://pypi.org/project/pyolymarket/
+<br>
+
+# Pyolymarket 
+
+A Python wrapper for the Polymarket API with embedding-based event search.
+
+For installation run:
+
+```shell
+pip install pyolymarket
+```
+
+## Example Usage
+
+For extensive example usages, see the `test/` Jupyter notebooks.
+
+## Documentation
+
+### [GitPages documentation]()
+
+### [PyPi web page](https://pypi.org/project/pyolymarket/)
