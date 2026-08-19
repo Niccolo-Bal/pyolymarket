@@ -14,10 +14,10 @@ pip install pyolymarket
 
 ## Example Usage
 
-For extensive example usages, see the `test/` notebooks.
+For extensive example usages, see the `test/` Jupyter notebooks.
 
 ## Documentation
 
-### GitPages documentation
+### [GitPages documentation]()
 
 ### [PyPi web page](https://pypi.org/project/pyolymarket/)
