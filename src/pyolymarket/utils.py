@@ -9,10 +9,11 @@ from .config import config
 
 # Cannonical Polymarket Searches
 
-
+def polymarket_search_event(query : str) -> Event | list[Event]:
+    pass
 
 # Works better than embedded search but inconsistent
-def ddgSearchEvent(query : str, depth : int = 10, max_results : int = 1) -> Event | list[Event]: 
+def ddg_search_event(query : str, depth : int = 10, max_results : int = 1) -> Event | list[Event]: 
     
     if max_results < 1: 
         raise ValueError("max_results must be a positive value") 
@@ -44,7 +45,7 @@ def ddgSearchEvent(query : str, depth : int = 10, max_results : int = 1) -> Even
     return None
 
 # Embedded searches through cached embedded list of Events.
-def embeddedSearchEvent(query : str, results : int = 1, data : pd.DataFrame | None = None) -> Event | list[Event]: # Fallback allways return result
+def embedded_search_event(query : str, results : int = 1, data : pd.DataFrame | None = None) -> Event | list[Event]: # Fallback allways return result
 
     if not config.caching:
         raise EmbeddingError("Cannot do embedded search while caching is disabled. "

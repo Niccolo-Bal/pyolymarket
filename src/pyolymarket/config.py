@@ -1,7 +1,9 @@
 import os
 
 class Config:
-    API_KEY_ENV =  "OPENAI_API_KEY"
+    API_KEY_ENV =  "PYOLY_OPENAI_API_KEY" 
+    # TODO: Add functionality for local embedding models
+    # (stick with OpenAI API compatable for now)
     _caching = "off"
     log = False
     CACHE_DIR = os.getcwd() + "/pyolymarket_cache"

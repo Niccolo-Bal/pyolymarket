@@ -1,7 +1,7 @@
 from . import embedding_logic as embedding
 from . import cacher as cacher
 from . import utils as utils
-from .utils import ddgSearchEvent, embeddedSearchEvent
+from .utils import ddg_search_event, embedded_search_event
 from .polyclasses import Event, Market
 from .custom_exceptions import (
     PolymarketAPIError,

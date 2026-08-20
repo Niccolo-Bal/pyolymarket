@@ -41,6 +41,7 @@ Source = "https://github.com/Niccolo-Bal/pyolymarket"
 [tool.setuptools.packages.find]
 include = ["pyolymarket", "pyolymarket.*"]
 where = ["src"]
+local_scheme = "no-local-version"
 namespaces = false
 
 [tool.setuptools_scm]

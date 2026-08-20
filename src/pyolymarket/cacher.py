@@ -68,7 +68,7 @@ def cache():
 
     embedding_df = new_events[["shortenedDesc"]].drop_duplicates()
     embedding_list = embedding_df["shortenedDesc"].to_list()
-    vectorized_list, tokens = emb.embedList(embedding_list) 
+    vectorized_list, tokens = emb.embed_list(embedding_list) 
     logger.info(f" Succesfully embeded new events. Tokens used: {tokens}")
     embedding_df["embeddedVector"] = vectorized_list
 

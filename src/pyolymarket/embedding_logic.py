@@ -18,11 +18,11 @@ def embed(text : str) -> list[np.ndarray[float]]:
         input = text, model = embedder
     ).data[0].embedding
 
-def embedList(texts : list[str]) -> tuple[list[np.ndarray[float]], int]:
+def embed_list(texts : list[str]) -> tuple[list[np.ndarray[float]], int]:
 
     if len(texts) > 2048:
-        list_1, tokens_1 = embedList(texts[:(len(texts) // 2)])
-        list_2, tokens_2 = embedList(texts[(len(texts) // 2) :])
+        list_1, tokens_1 = embed_list(texts[:(len(texts) // 2)])
+        list_2, tokens_2 = embed_list(texts[(len(texts) // 2) :])
         return list_1 + list_2, tokens_1 + tokens_2
 
     response = OpenAIClient.embeddings.create(
