@@ -14,15 +14,27 @@ from .custom_exceptions import (
 )
 
 # Single place where HTTP happens. Everything else in the library goes through
-# get()/get_json() so timeouts, retries and error translation stay consistent.
+# get()/get_json()/post_json() so timeouts, retries and error translation stay
+# consistent.
 
 GAMMA = "https://gamma-api.polymarket.com/"
+CLOB = "https://clob.polymarket.com/"
 
 DEFAULT_TIMEOUT = 10.0
 DEFAULT_RETRIES = 3
 RETRY_STATUSES = (429, 500, 502, 503, 504)
 
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
+
+def _user_agent() -> str:
+    """Gamma answers 403 to some default client user agents, so always send one."""
+    try:
+        from . import __version__
+    except ImportError:
+        __version__ = "unknown"
+    return f"pyolymarket/{__version__} (+https://github.com/Niccolo-Bal/pyolymarket)"
 
 
 def _build_session(retries: int = DEFAULT_RETRIES) -> requests.Session:
@@ -34,14 +46,17 @@ def _build_session(retries: int = DEFAULT_RETRIES) -> requests.Session:
         status = retries,
         backoff_factor = 0.5,
         status_forcelist = RETRY_STATUSES,
-        allowed_methods = frozenset(["GET", "HEAD", "OPTIONS"]),
+        # POST is retried because every POST this library sends is a read-only
+        # batch query (CLOB /books, /prices, /midpoints, ...).
+        allowed_methods = frozenset(["GET", "HEAD", "OPTIONS", "POST"]),
         respect_retry_after_header = True,
         raise_on_status = False,
     )
     adapter = HTTPAdapter(max_retries = retry, pool_maxsize = 20)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
-    session.headers.update({"Accept": "application/json"})
+    session.headers.update({"Accept": "application/json",
+                            "User-Agent": _user_agent()})
     return session
 
 
@@ -77,17 +92,20 @@ def _raise_for_status(response: requests.Response, url: str) -> None:
     raise PolymarketAPIError(f"{url} returned HTTP {response.status_code}: {detail}")
 
 
-def get(path: str,
-        params: dict[str, Any] | None = None,
-        timeout: float = DEFAULT_TIMEOUT,
-        base: str = GAMMA,
-        sess: requests.Session | None = None) -> requests.Response:
-    """GET with a timeout and retries. Raises a Polymarket* exception on failure."""
+def _request(method: str,
+             path: str,
+             params: dict[str, Any] | None = None,
+             json_body: Any = None,
+             timeout: float = DEFAULT_TIMEOUT,
+             base: str = GAMMA,
+             sess: requests.Session | None = None,
+             headers: dict[str, str] | None = None) -> requests.Response:
     url = path if path.startswith("http") else base + path.lstrip("/")
     sess = sess or session()
 
     try:
-        response = sess.get(url, params = params, timeout = timeout)
+        response = sess.request(method, url, params = params, json = json_body,
+                                timeout = timeout, headers = headers)
     except requests.exceptions.Timeout as e:
         raise PolymarketAPIError(f"{url} timed out after {timeout}s") from e
     except requests.exceptions.RequestException as e:
@@ -97,15 +115,31 @@ def get(path: str,
     return response
 
 
-def get_json(path: str,
-             params: dict[str, Any] | None = None,
-             timeout: float = DEFAULT_TIMEOUT,
-             base: str = GAMMA,
-             sess: requests.Session | None = None) -> Any:
-    """GET and decode JSON. Gamma signals some errors with HTTP 200 and a
-    body containing "type", so check for that too."""
-    response = get(path, params = params, timeout = timeout, base = base, sess = sess)
+def get(path: str,
+        params: dict[str, Any] | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+        base: str = GAMMA,
+        sess: requests.Session | None = None,
+        headers: dict[str, str] | None = None) -> requests.Response:
+    """GET with a timeout and retries. Raises a Polymarket* exception on failure."""
+    return _request("GET", path, params = params, timeout = timeout,
+                    base = base, sess = sess, headers = headers)
 
+
+def post(path: str,
+         json_body: Any = None,
+         params: dict[str, Any] | None = None,
+         timeout: float = DEFAULT_TIMEOUT,
+         base: str = CLOB,
+         sess: requests.Session | None = None,
+         headers: dict[str, str] | None = None) -> requests.Response:
+    """POST with a timeout and retries. Used for the CLOB batch read endpoints,
+    whose documented GET forms return 400/405."""
+    return _request("POST", path, params = params, json_body = json_body,
+                    timeout = timeout, base = base, sess = sess, headers = headers)
+
+
+def _decode(response: requests.Response) -> Any:
     try:
         payload = response.json()
     except ValueError as e:
@@ -116,3 +150,28 @@ def get_json(path: str,
         raise PolymarketAPIError(f"{response.url} returned error: {payload['type']}")
 
     return payload
+
+
+def get_json(path: str,
+             params: dict[str, Any] | None = None,
+             timeout: float = DEFAULT_TIMEOUT,
+             base: str = GAMMA,
+             sess: requests.Session | None = None,
+             headers: dict[str, str] | None = None) -> Any:
+    """GET and decode JSON. Gamma signals some errors with HTTP 200 and a
+    body containing "type", so check for that too."""
+    return _decode(get(path, params = params, timeout = timeout, base = base,
+                       sess = sess, headers = headers))
+
+
+def post_json(path: str,
+              json_body: Any = None,
+              params: dict[str, Any] | None = None,
+              timeout: float = DEFAULT_TIMEOUT,
+              base: str = CLOB,
+              sess: requests.Session | None = None,
+              headers: dict[str, str] | None = None) -> Any:
+    """POST and decode JSON, with the same error translation as get_json()."""
+    return _decode(post(path, json_body = json_body, params = params,
+                        timeout = timeout, base = base, sess = sess,
+                        headers = headers))

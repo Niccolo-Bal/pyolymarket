@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyolymarket"
-description = "Python wrapper for the Polymarket API with embedding-based event search"
+description = "Python wrapper for the Polymarket Gamma and CLOB APIs, with native and embedding-based event search"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.12"
@@ -12,19 +12,38 @@ dynamic = ["version"]
 dependencies = [
     "requests",
     "urllib3",
-    "numpy",
-    "pandas",
-    "openai",
-    "scikit-learn",
-    "sentence-transformers",
-    "alive-progress",
-    "ddgs",
 ]
 
 [project.optional-dependencies]
+# The Gamma and CLOB clients need nothing beyond the core. Everything below is
+# resolved lazily on first use, so a missing extra raises a message naming it
+# rather than failing at import.
+cache = [
+  "numpy",
+  "pandas",
+  "pyarrow",
+  "alive-progress",
+]
+
+embeddings = [
+  "numpy",
+  "openai",
+]
+
+search = [
+  "ddgs",
+]
+
+trading = [
+  "eth-account",
+]
+
+all = [
+  "pyolymarket[cache,embeddings,search,trading]",
+]
+
 docs = [
   "mkdocs",
-  "mkdocs-material",
   "mkdocstrings-python",
 ]
 
@@ -41,7 +60,9 @@ Source = "https://github.com/Niccolo-Bal/pyolymarket"
 [tool.setuptools.packages.find]
 include = ["pyolymarket", "pyolymarket.*"]
 where = ["src"]
-local_scheme = "no-local-version"
 namespaces = false
 
 [tool.setuptools_scm]
+version_scheme = "no-guess-dev"
+local_scheme = "no-local-version"
+
