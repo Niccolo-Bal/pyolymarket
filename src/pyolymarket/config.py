@@ -39,7 +39,7 @@ class Config:
         """Read at access time rather than import time, so the cache lands
         relative to the working directory the caller actually has."""
         if self._cache_dir is None:
-            return os.path.join(os.getcwd(), "pyolymarket_cache")
+            return os.path.join(os.getcwd(), "___pyolymarket_cache___")
         return self._cache_dir
 
     @CACHE_DIR.setter
