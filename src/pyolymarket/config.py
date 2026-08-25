@@ -4,17 +4,11 @@ CACHE_LEVELS = ("off", "on", "csv", "npy")
 
 
 class Config:
-    API_KEY_ENV =  "PYOLY_OPENAI_API_KEY" 
+    EMB_API_KEY_ENV =  "PYOLY_OPENAI_API_KEY" 
 
-    # Embeddings go through the OpenAI wire format. Pointing embedding_base_url
-    # at any OpenAI-compatible server (Ollama, LM Studio, vLLM, llama.cpp)
-    # keeps everything local, in which case the API key is optional.
     embedding_model = "text-embedding-3-small"
     embedding_base_url = None
 
-    # CLOB credentials. L2 (api key / secret / passphrase) covers authenticated
-    # reads; the private key is only needed to mint or derive those in the
-    # first place.
     CLOB_API_KEY_ENV = "PYOLY_CLOB_API_KEY"
     CLOB_SECRET_ENV = "PYOLY_CLOB_SECRET"
     CLOB_PASSPHRASE_ENV = "PYOLY_CLOB_PASSPHRASE"
@@ -26,13 +20,12 @@ class Config:
     _cache_dir = None
 
     @property
-    def api_key(self):
+    def emb_api_key(self):
         key = os.getenv(self.API_KEY_ENV)
         if not key:
             if self.embedding_base_url:
-                # Local servers usually ignore the key but the OpenAI client
-                # still insists on one being present.
-                return "not-needed"
+                # Local endpoints don't need a key
+                return "foo"
             raise EnvironmentError(
                 f"Missing env var: {self.API_KEY_ENV}. Make sure a "
                 f"{self.embedding_model} API key is properly set up before using "
