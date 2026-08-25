@@ -41,7 +41,12 @@ pip install dist/<.whl file>
 
 ## Example Usage
 
-Worked examples live in `tests/` 
+Worked examples live in `tests/`, as four notebooks:
+
+- `01_gamma_basics.ipynb` - events, markets and resolution through the Gamma API
+- `02_clob_basics.ipynb` - quotes, order books and price history through the CLOB
+- `03_embedding_basics.ipynb` - embedding search and the disk cache
+- `04_utils_basics.ipynb` - finding events, and configuring the rest of the library
 
 ## Version
 
