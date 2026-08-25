@@ -15,7 +15,7 @@ def _openai() -> OpenAI:
     to a local server mid-session takes effect."""
     global _OpenAIClient, _client_settings
 
-    settings = (config.embedding_base_url, config.api_key)
+    settings = (config.embedding_base_url, config.emb_api_key)
     if _OpenAIClient is None or _client_settings != settings:
         base_url, api_key = settings
         _OpenAIClient = OpenAI(api_key = api_key, base_url = base_url)

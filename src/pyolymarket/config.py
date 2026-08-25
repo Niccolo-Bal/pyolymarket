@@ -21,17 +21,17 @@ class Config:
 
     @property
     def emb_api_key(self):
-        key = os.getenv(self.API_KEY_ENV)
+        key = os.getenv(self.EMB_API_KEY_ENV)
         if not key:
             if self.embedding_base_url:
                 # Local endpoints don't need a key
                 return "foo"
             raise EnvironmentError(
-                f"Missing env var: {self.API_KEY_ENV}. Make sure a "
+                f"Missing env var: {self.EMB_API_KEY_ENV}. Make sure a "
                 f"{self.embedding_model} API key is properly set up before using "
                 "embedding features, or point config.embedding_base_url at a "
                 "local OpenAI-compatible server. "
-                "Change the variable name with pyolymarket.config.API_KEY_ENV.")
+                "Change the variable name with pyolymarket.config.EMB_API_KEY_ENV.")
         return key
 
     @property

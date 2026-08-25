@@ -82,7 +82,12 @@ def _sort_book(payload: dict[str, Any]) -> dict[str, Any]:
 
 def price(token_id: str, side: Side,
           sess: requests.Session | None = None) -> float:
-    """Best price to BUY (best ask) or SELL (best bid) one outcome token."""
+    """Best resting price on one side of an outcome token's book.
+
+    `side` names the side of the book, not the trade you intend to make:
+    "BUY" answers with the best bid and "SELL" with the best ask, so the price
+    to acquire a token is the "SELL" one.
+    """
     side = _check_side(side)
     payload = _get("price", {"token_id": str(token_id), "side": side}, sess = sess)
     return float(payload["price"])
