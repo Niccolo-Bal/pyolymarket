@@ -164,12 +164,8 @@ def price_history(token_id: str,
     return _history_frame(history)
 
 
-def batch_price_history(token_ids: list[str],
-                        interval: str | None = None,
-                        start_ts: int | None = None,
-                        end_ts: int | None = None,
-                        fidelity: int | None = None,
-                        sess: requests.Session | None = None) -> dict[str, list]:
+def batch_price_history(token_ids: list[str], interval: str | None = None, start_ts: int | None = None, end_ts: int | None = None,
+                        fidelity: int | None = None, sess: requests.Session | None = None) -> dict[str, list]:
     """Price history for up to 20 tokens, keyed by token id.
 
     Note the parameter names are snake_case on this endpoint but camelCase on
@@ -279,9 +275,7 @@ def user_trades(market: str | None = None,
     return _auth_get("data/trades", params or None, sess = sess)
 
 
-def balance_allowance(asset_type: str = "COLLATERAL",
-                      token_id: str | None = None,
-                      sess: requests.Session | None = None) -> Any:
+def balance_allowance(asset_type: str = "COLLATERAL", token_id: str | None = None, sess: requests.Session | None = None) -> Any:
     params: dict[str, Any] = {"asset_type": asset_type}
     if token_id is not None:
         params["token_id"] = str(token_id)
@@ -293,7 +287,6 @@ def order_scoring(order_id: str, sess: requests.Session | None = None) -> Any:
 
 
 def derive_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
-    """Re-derive the L2 credentials for a wallet. Needs L1 (wallet) signing."""
     from . import _auth
 
     return _client.get_json("auth/derive-api-key", base = clob_base, sess = sess,
@@ -301,7 +294,6 @@ def derive_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
 
 
 def create_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
-    """Mint fresh L2 credentials for a wallet. Needs L1 (wallet) signing."""
     from . import _auth
 
     return _client.post_json("auth/api-key", base = clob_base, sess = sess,
