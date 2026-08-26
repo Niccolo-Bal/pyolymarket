@@ -8,25 +8,10 @@ from . import _client
 from ._client import CLOB as clob_base
 from .custom_exceptions import PolymarketAPIError
 
-# Read access to Polymarket's Central Limit Order Book.
-#
-# Everything in the "public" half of this module is unauthenticated. The
-# authenticated half needs L2 credentials (see config.clob_creds) and is still
-# read-only; order placement is out of scope.
-#
-# CLOB API docs: https://docs.polymarket.com/api-reference/
-#
-# Two things the docs get wrong, both confirmed against the live API:
-#   - GET /midpoint returns {"mid": ...}, not the documented "mid_price".
-#   - The documented GET forms of the batch endpoints answer 400/405. Batch
-#     requests have to be POSTs, which is why this module posts them.
-
 Side = Literal["BUY", "SELL"]
 
 INTERVALS = ("max", "all", "1m", "1w", "1d", "6h", "1h")
 
-# /prices-history is per outcome token, so its "market" parameter takes a token
-# id rather than a condition id. Kept as a named constant to make that visible.
 HISTORY_TOKEN_PARAM = "market"
 
 
