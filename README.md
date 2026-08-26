@@ -4,7 +4,9 @@
 
 # Pyolymarket 
 
-Pyolymarket is a Python wrapper for Polymarket's public Gamma and CLOB APIs. It loads events and markets as objects you can inspect and refresh, optionally caches that catalogue on disk, and searches events by embedding similarity instead of exact keywords. All current features are available with no secretes needed, but Caching requires an OpenAI-compatable embedding model, and future CLOB trading implementation will require CLOB secretes.
+Pyolymarket is a Python wrapper for Polymarket's public Gamma and CLOB APIs. It loads events and markets as objects you can inspect and refresh, optionally caches that catalogue on disk, and searches events by embedding similarity instead of exact keywords. All current features are available with no secretes needed, but Caching requires an OpenAI-compatable embedding model, and CLOB features require CLOB secretes.
+
+Trading through CLOB has not yet been implemented.
 
 ## Setup
 
@@ -13,6 +15,8 @@ For installation run:
 ```shell
 pip install pyolymarket
 ```
+
+<br>
 
 Embedding search needs an OpenAI-compatible key in `PYOLY_OPENAI_API_KEY`.
 
@@ -59,6 +63,6 @@ Most recent changes:
 
 ## Documentation
 
-### [GitPages documentation](tbd) - In progress
+### [GitPages documentation](tbd) - Not yet implemented
 
 ### [PyPi web page](https://pypi.org/project/pyolymarket/)
