@@ -11,14 +11,14 @@ _client_settings = None
 
 
 def _openai() -> OpenAI:
-    """Cached client, rebuilt if the configured endpoint changes so switching
-    to a local server mid-session takes effect."""
+    # Initializing like this lets you import the file without
+    # throwing for invalid key/url when not caching
     global _OpenAIClient, _client_settings
 
     settings = (config.embedding_base_url, config.emb_api_key)
     if _OpenAIClient is None or _client_settings != settings:
-        base_url, api_key = settings
-        _OpenAIClient = OpenAI(api_key = api_key, base_url = base_url)
+        base_url, emb_api_key = settings
+        _OpenAIClient = OpenAI(emb_api_key = emb_api_key, base_url = base_url)
         _client_settings = settings
     return _OpenAIClient
 
@@ -31,23 +31,29 @@ def embed(text : str, model : str | None = None) -> list[np.ndarray[float]]:
         input = text, model = model or config.embedding_model
     ).data[0].embedding
 
-def embed_list(texts : list[str], model : str | None = None) -> tuple[list[np.ndarray[float]], int]:
-
+def _embed_list_help(texts, model):
+    
     model = model or config.embedding_model
 
     if len(texts) > 2048:
-        list_1, tokens_1 = embed_list(texts[:(len(texts) // 2)], model = model)
-        list_2, tokens_2 = embed_list(texts[(len(texts) // 2) :], model = model)
-        return list_1 + list_2, tokens_1 + tokens_2
+        vecs_1, tokens_1 = _embed_list_help(texts[:(len(texts) // 2)], model = model)
+        vecs_2, tokens_2 = _embed_list_help(texts[(len(texts) // 2) :], model = model)
+        return vecs_1 + vecs_2, tokens_1 + tokens_2
 
     response = _openai().embeddings.create(
         input = texts, model = model)
-    
-    if response.usage.total_tokens > 10 ** 5:
-        logger.warning("Large embedding request (%s tokens). Make sure this was "
-                       "not sent in error.", response.usage.total_tokens)
 
     return [item.embedding for item in response.data], response.usage.total_tokens
+
+def embed_list(texts: list[str], model: str | None = None) -> tuple[list[np.ndarray[float]], int]:
+
+    vecs, tokens = _embed_list_help(texts, model)
+
+    if tokens > 10 ** 5:
+            logger.warning("Large embedding request (%s tokens). Make sure this was "
+                           "not sent in error.", tokens)
+
+    return vecs, tokens
 
 if __name__ == "__main__":
     pass

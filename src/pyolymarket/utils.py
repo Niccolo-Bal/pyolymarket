@@ -11,16 +11,6 @@ from .config import config
 if TYPE_CHECKING:
     import pandas as pd
 
-# numpy, pandas and the openai client are only needed by embedded_search_event,
-# so they are imported inside it rather than here. That keeps the native and
-# DuckDuckGo searches usable on a bare install.
-
-# Cannonical Polymarket Searches
-
-# Gamma's search endpoint silently ignores query parameters it doesn't
-# recognize, answering 200 with an unfiltered result set. A typo would look
-# like a bad ranking rather than a mistake, so the accepted names are pinned
-# here and anything else raises.
 SEARCH_PARAMS = frozenset({
     "q", "cache", "events_status", "limit_per_type", "page", "events_tag",
     "keep_closed_markets", "sort", "ascending", "search_tags",
@@ -29,12 +19,7 @@ SEARCH_PARAMS = frozenset({
 
 
 def polymarket_search(query : str, **params) -> dict:
-    """Raw response from Polymarket's native search.
 
-    Returns {"events": [...], "pagination": {"hasMore", "totalResults"}}, plus
-    "tags" and "profiles" when search_tags / search_profiles are set. Any of
-    the parameters in SEARCH_PARAMS may be passed as a keyword.
-    """
     if not query:
         raise ValueError("polymarket_search requires a non-empty query")
 
@@ -48,28 +33,16 @@ def polymarket_search(query : str, **params) -> dict:
     for key, value in params.items():
         if value is None:
             continue
-        # Gamma wants JSON-style booleans, not Python's capitalized repr.
         query_params[key] = str(value).lower() if isinstance(value, bool) else value
 
     return _client.get_json("public-search", params = query_params)
 
 
-def polymarket_search_event(query : str,
-                            results : int = 5,
-                            page : int | None = None,
-                            events_tag : list[str] | None = None,
-                            events_status : str | None = None,
-                            keep_closed_markets : int | None = None,
-                            sort : str | None = None,
-                            ascending : bool | None = None,
-                            exclude_tag_id : list[int] | None = None,
-                            **params) -> Event | list[Event]:
-    """Search Polymarket's own index and return Events.
-
-    One request total: search hits arrive with their markets nested, so the
-    Events are built from that payload rather than re-fetched. Returns a bare
-    Event when results == 1, mirroring the other search helpers here.
-    """
+# Native Polymarket search
+def polymarket_search_event(query : str, results : int = 5, page : int | None = None, events_tag : list[str] | None = None,
+                            events_status : str | None = None, keep_closed_markets : int | None = None, sort : str | None = None,
+                            ascending : bool | None = None, exclude_tag_id : list[int] | None = None, **params) -> Event | list[Event]:
+    
     if results < 1:
         raise ValueError("results must be a positive value")
 
