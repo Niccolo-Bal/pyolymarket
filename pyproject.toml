@@ -15,9 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The Gamma and CLOB clients need nothing beyond the core. Everything below is
-# resolved lazily on first use, so a missing extra raises a message naming it
-# rather than failing at import.
+
 cache = [
   "numpy",
   "pandas",
