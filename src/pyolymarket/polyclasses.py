@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
 
 def _parse_time(value) -> datetime | None:
-    """Gamma timestamps are ISO 8601 strings, sometimes Z-suffixed and sometimes
-    naive. Normalize to an aware UTC datetime so comparisons are safe."""
     if not value:
         return None
     if isinstance(value, datetime):
@@ -35,8 +33,6 @@ def _parse_time(value) -> datetime | None:
 
 
 def _json_field(data: dict, key: str) -> list:
-    """Gamma returns clobTokenIds, outcomes and outcomePrices as JSON-encoded
-    strings rather than arrays, so they need a second decode pass."""
     raw = data.get(key)
     if raw is None:
         return []
@@ -80,9 +76,6 @@ class Event:
 
     @classmethod
     def from_data(cls, data : dict, vec : list[np.array] = None) -> "Event":
-        """Build an Event from a payload already in hand, without another
-        request. Search results and cached rows arrive fully populated, so
-        re-fetching them would only cost latency."""
         event = cls.__new__(cls)
         event.data = data
         event.id = data.get("id")
@@ -94,8 +87,6 @@ class Event:
 
     @property
     def markets(self) -> list["Market"]:
-        """Markets nested in this event's payload, as Market objects. No extra
-        requests: the event payload already carries them in full."""
         if self._markets is None:
             self._markets = [Market.from_data(m)
                              for m in (self.data.get("markets") or [])]
@@ -176,9 +167,7 @@ class Market:
         self.__resolution = None
 
     @classmethod
-    def from_data(cls, data : dict) -> "Market":
-        """Build a Market from a payload already in hand, without another
-        request. Markets nested inside an event or a search hit are complete."""
+    def from_data(cls, data : dict) -> Market:
         market = cls.__new__(cls)
         market.data = data
         market.id = data.get("id")
@@ -210,8 +199,6 @@ class Market:
         self.refresh()
         status = self.data.get("umaResolutionStatus")
         if not status:
-            # Past its end date but the oracle has not reported yet. Don't
-            # memoize this, it is the one answer that is expected to change.
             return "unresolved"
 
         self.__resolution = status
