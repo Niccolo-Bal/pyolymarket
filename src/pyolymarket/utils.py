@@ -19,6 +19,8 @@ SEARCH_PARAMS = frozenset({
 
 
 def polymarket_search(query : str, **params) -> dict:
+    """Polymarket's own search endpoint, returned as-is. Accepts the query
+    parameters in SEARCH_PARAMS and rejects anything else."""
 
     if not query:
         raise ValueError("polymarket_search requires a non-empty query")
@@ -41,8 +43,9 @@ def polymarket_search(query : str, **params) -> dict:
 # Native Polymarket search
 def polymarket_search_event(query : str, results : int = 5, page : int | None = None, events_tag : list[str] | None = None,
                             events_status : str | None = None, keep_closed_markets : int | None = None, sort : str | None = None,
-                            ascending : bool | None = None, exclude_tag_id : list[int] | None = None, **params) -> Event | list[Event]:
-    
+                            ascending : bool | None = None, exclude_tag_id : list[int] | None = None, **params) -> list[Event]:
+    """Native search, as Event objects. Always a list, empty when nothing matched."""
+
     if results < 1:
         raise ValueError("results must be a positive value")
 
@@ -57,15 +60,7 @@ def polymarket_search_event(query : str, results : int = 5, page : int | None = 
                                 exclude_tag_id = exclude_tag_id,
                                 **params)
 
-    events = [Event.from_data(data) for data in payload.get("events") or []]
-
-    if not events:
-        return None
-
-    if results == 1:
-        return events[0]
-
-    return events
+    return [Event.from_data(data) for data in payload.get("events") or []]
 
 
 def _event_slug(url : str) -> str | None:
@@ -91,8 +86,11 @@ def _event_slug(url : str) -> str | None:
 
 
 # Works better than embedded search but inconsistent
-def ddg_search_event(query : str, depth : int = 10, max_results : int = 1) -> Event | list[Event]: 
-    
+def ddg_search_event(query : str, depth : int = 10, max_results : int = 1) -> list[Event]:
+    """Search DuckDuckGo for polymarket.com event links and load them. Looks
+    through `depth` web results and returns up to `max_results` events. Always
+    a list, empty when nothing was found."""
+
     if max_results < 1: 
         raise ValueError("max_results must be a positive value") 
 
@@ -125,17 +123,15 @@ def ddg_search_event(query : str, depth : int = 10, max_results : int = 1) -> Ev
             search_events.append(event)
 
             if len(search_events) == max_results:
-                if max_results == 1:
-                    return event
-                return search_events
+                break
 
-    if len(search_events) != 0:
-        return search_events
-
-    return None
+    return search_events
 
 # Embedded searches through cached embedded list of Events.
-def embedded_search_event(query : str, results : int = 1, data : pd.DataFrame | None = None) -> Event | list[Event]: # Fallback allways return result
+def embedded_search_event(query : str, results : int = 1, data : pd.DataFrame | None = None) -> list[Event]:
+    """Rank embedded events by cosine similarity to the query, best first.
+    Searches the cache by default, or `data`: a table with an "id" column and
+    an "embeddedVector" column. Always a list."""
 
     if results < 1: 
         raise ValueError("results must be a positive value")
@@ -155,11 +151,15 @@ def embedded_search_event(query : str, results : int = 1, data : pd.DataFrame | 
                                  "Set pyolymarket.config.caching = True, or pass a "
                                  "DataFrame as data=")
         try:
-            from .cacher import events, events_vecs
+            from . import cacher
         except ImportError as e:
             raise ImportError(
                 "Searching the cached catalogue needs the cache dependencies. "
                 "Install them with: pip install pyolymarket[cache]") from e
+
+        # Reads the cache off disk on first use, building it if there is none.
+        cacher.default.ensure_loaded()
+        events, events_vecs = cacher.default.events, cacher.default.events_vecs
         if events is None or events_vecs is None:
             raise EmbeddingError(
                 "No embedding cache available. Build one with "
@@ -189,8 +189,5 @@ def embedded_search_event(query : str, results : int = 1, data : pd.DataFrame | 
     )
     top_n_idx = np.argpartition(similarity_vec, -results)[-results:]
     ranked_idx = sorted(top_n_idx, key = lambda i : -similarity_vec[i])
-    
-    if results == 1: 
-        return Event(id = events.iloc[ranked_idx[0]]["id"])
 
     return [Event(id = event_id) for event_id in events.iloc[ranked_idx]["id"]]

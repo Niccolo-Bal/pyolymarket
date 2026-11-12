@@ -1,0 +1,11 @@
+# Store text with LF in the repository and let each checkout use its own line
+# endings, so files edited on Windows don't show up as fully rewritten.
+* text=auto
+
+*.py    text
+*.md    text
+*.toml  text
+*.yml   text
+*.ipynb text eol=lf
+
+*.png   binary

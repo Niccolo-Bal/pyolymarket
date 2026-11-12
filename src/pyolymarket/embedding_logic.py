@@ -1,7 +1,5 @@
 import logging
-import numpy as np
 from .config import config
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -10,10 +8,17 @@ _OpenAIClient = None
 _client_settings = None
 
 
-def _openai() -> OpenAI:
+def _openai():
     # Initializing like this lets you import the file without
     # throwing for invalid key/url when not caching
     global _OpenAIClient, _client_settings
+
+    try:
+        from openai import OpenAI
+    except ImportError as e:
+        raise ImportError(
+            "Embedding features need the openai client. "
+            "Install it with: pip install pyolymarket[embeddings]") from e
 
     settings = (config.embedding_base_url, config.emb_api_key)
     if _OpenAIClient is None or _client_settings != settings:
@@ -23,7 +28,8 @@ def _openai() -> OpenAI:
     return _OpenAIClient
 
 
-def embed(text : str, model : str | None = None) -> list[np.ndarray[float]]:
+def embed(text : str, model : str | None = None) -> list[float] | None:
+    """Embedding vector for one string. None for an empty string."""
 
     if text == "": return None
 
@@ -45,7 +51,8 @@ def _embed_list_help(texts, model):
 
     return [item.embedding for item in response.data], response.usage.total_tokens
 
-def embed_list(texts: list[str], model: str | None = None) -> tuple[list[np.ndarray[float]], int]:
+def embed_list(texts: list[str], model: str | None = None) -> tuple[list[list[float]], int]:
+    """Embedding vectors for many strings, plus the tokens the request used."""
 
     vecs, tokens = _embed_list_help(texts, model)
 

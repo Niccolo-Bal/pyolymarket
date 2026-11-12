@@ -44,7 +44,26 @@ def _json_field(data: dict, key: str) -> list:
         return []
 
 
+def _to_float(value) -> float | None:
+    """Gamma sends some numbers as strings and omits others entirely."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_bool(value) -> bool | None:
+    return None if value is None else bool(value)
+
+
 class Event:
+    """A Polymarket event: one question page holding one or more markets.
+
+    Load one with Event(id=...) or Event(slug=...). The full Gamma payload is
+    in `.data`; the properties below cover the fields used most.
+    """
 
     def __init__(self, id: str = None, slug : str = None, vec : list[np.array] = None):
         
@@ -101,10 +120,47 @@ class Event:
         return self.data.get("title")
 
     @property
+    def description(self) -> str | None:
+        return self.data.get("description")
+
+    @property
+    def start_date(self) -> datetime | None:
+        return _parse_time(self.data.get("startDate"))
+
+    @property
     def end_date(self) -> datetime | None:
         return _parse_time(self.data.get("endDate"))
 
+    @property
+    def active(self) -> bool | None:
+        return _to_bool(self.data.get("active"))
+
+    @property
+    def closed(self) -> bool | None:
+        return _to_bool(self.data.get("closed"))
+
+    @property
+    def volume(self) -> float | None:
+        """Total traded volume across the event's markets, in USDC."""
+        return _to_float(self.data.get("volume"))
+
+    @property
+    def liquidity(self) -> float | None:
+        return _to_float(self.data.get("liquidity"))
+
+    @property
+    def tags(self) -> list[str]:
+        """Tag labels, e.g. ["Politics", "Elections"]."""
+        return [tag.get("label") or tag.get("slug") for tag
+                in (self.data.get("tags") or []) if isinstance(tag, dict)]
+
+    @property
+    def url(self) -> str | None:
+        return f"https://polymarket.com/event/{self.slug}" if self.slug else None
+
     def vectorize(self, in_place : bool = True):
+        """Embed this event's description (see cacher for the exact text used).
+        Stores the vector on `.vec` unless in_place is False."""
         from . import embedding_logic as emb
 
         vec = self._cached_vec() if config.caching else None
@@ -122,12 +178,21 @@ class Event:
 
     def _cached_vec(self):
         """Reuse the embedding the cacher already paid for, if this event is in it."""
-        try:
-            from .cacher import events
-        except (ImportError, AttributeError):
+        if self.id is None:
             return None
 
-        if events is None or self.id is None or "embeddedVector" not in events:
+        try:
+            from . import cacher
+        except ImportError:
+            return None
+
+        # Only what is already on disk or in memory: embedding one event is not
+        # a reason to pull the whole catalogue.
+        if not cacher.default.ensure_loaded(build = False):
+            return None
+
+        events = cacher.default.events
+        if "embeddedVector" not in events:
             return None
 
         hit = events.loc[events["id"].astype(str) == str(self.id), "embeddedVector"]
@@ -136,13 +201,18 @@ class Event:
         return hit.iloc[0]
 
     def refresh(self):
+        """Re-fetch the event from Gamma and restamp `data_timestamp`."""
         self.data = _client.get_json("events/" + str(self.id))
         self.data_timestamp = datetime.now()
         self._markets = None
 
     def to_frame(self):
         """Markets in this event as a DataFrame, one row per market."""
-        import pandas as pd
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError("to_frame needs pandas. Install it with: "
+                              "pip install pyolymarket[cache]") from e
 
         return pd.DataFrame(self.data.get("markets") or [])
 
@@ -154,6 +224,13 @@ class Event:
 
 
 class Market:
+    """One tradable question inside an event.
+
+    Load one with Market(id=...) or Market(slug=...), or take them from
+    Event.markets. The full Gamma payload is in `.data`. The quote properties
+    (best_bid, best_ask, last_trade_price) are a snapshot from when the data
+    was fetched; the methods at the bottom ask the CLOB for live values.
+    """
 
     def __init__(self, id : str = None, slug : str = None):
         if id:
@@ -194,8 +271,62 @@ class Market:
         return market
 
     def refresh(self):
+        """Re-fetch the market from Gamma and restamp `data_timestamp`."""
         self.data = _client.get_json("markets/" + str(self.id))
         self.data_timestamp = datetime.now()
+
+    @property
+    def question(self) -> str | None:
+        return self.data.get("question")
+
+    @property
+    def description(self) -> str | None:
+        return self.data.get("description")
+
+    @property
+    def start_date(self) -> datetime | None:
+        return _parse_time(self.data.get("startDate"))
+
+    @property
+    def end_date(self) -> datetime | None:
+        return _parse_time(self.data.get("endDate"))
+
+    @property
+    def active(self) -> bool | None:
+        return _to_bool(self.data.get("active"))
+
+    @property
+    def closed(self) -> bool | None:
+        return _to_bool(self.data.get("closed"))
+
+    @property
+    def accepting_orders(self) -> bool | None:
+        return _to_bool(self.data.get("acceptingOrders"))
+
+    @property
+    def volume(self) -> float | None:
+        """Total traded volume, in USDC."""
+        value = self.data.get("volumeNum")
+        return _to_float(self.data.get("volume") if value is None else value)
+
+    @property
+    def liquidity(self) -> float | None:
+        value = self.data.get("liquidityNum")
+        return _to_float(self.data.get("liquidity") if value is None else value)
+
+    @property
+    def best_bid(self) -> float | None:
+        """Best bid for the first outcome, as of `data_timestamp`."""
+        return _to_float(self.data.get("bestBid"))
+
+    @property
+    def best_ask(self) -> float | None:
+        """Best ask for the first outcome, as of `data_timestamp`."""
+        return _to_float(self.data.get("bestAsk"))
+
+    @property
+    def last_trade_price(self) -> float | None:
+        return _to_float(self.data.get("lastTradePrice"))
 
     @property 
     def resolved(self) -> bool:
@@ -210,6 +341,8 @@ class Market:
     
     @property
     def resolution(self):
+        """"pending" while the market is open, otherwise the UMA oracle's
+        status, or "unresolved" if it has none."""
         if not self.resolved:
             return "pending"
         if self.__resolution:
@@ -268,21 +401,25 @@ class Market:
                          f"Market outcomes are: {', '.join(labels)}")
 
     def book(self, outcome : str | int = 0) -> dict:
+        """Live order book for one outcome. See clob.book()."""
         from . import clob
 
         return clob.book(self.token_id(outcome))
 
     def midpoint(self, outcome : str | int = 0) -> float:
+        """Live midpoint between best bid and best ask for one outcome."""
         from . import clob
 
         return clob.midpoint(self.token_id(outcome))
 
     def spread(self, outcome : str | int = 0) -> float:
+        """Live bid-ask spread for one outcome."""
         from . import clob
 
         return clob.spread(self.token_id(outcome))
 
     def price(self, side : str, outcome : str | int = 0) -> float:
+        """Live best bid ("BUY") or best ask ("SELL"). See clob.price()."""
         from . import clob
 
         return clob.price(self.token_id(outcome), side)
@@ -294,6 +431,7 @@ class Market:
                       end_ts : int | None = None,
                       fidelity : int | None = None,
                       as_frame : bool = False):
+        """Price timeseries for one outcome. See clob.price_history()."""
         from . import clob
 
         if start_ts is not None or end_ts is not None:
