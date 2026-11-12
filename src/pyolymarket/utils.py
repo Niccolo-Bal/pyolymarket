@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from . import _client
-from .custom_exceptions import EmbeddingError
+from .custom_exceptions import EmbeddingError, PolymarketNotFoundError
 from .polyclasses import Event
 from .config import config
 
@@ -68,6 +68,28 @@ def polymarket_search_event(query : str, results : int = 5, page : int | None = 
     return events
 
 
+def _event_slug(url : str) -> str | None:
+    """Event slug from a polymarket.com event URL, or None for anything else.
+    Handles /event/<slug>, /event/<slug>/<market-slug>, query strings,
+    trailing slashes and locale prefixes."""
+    try:
+        parts = urlsplit(url or "")
+    except ValueError:
+        return None
+
+    host = (parts.hostname or "").lower()
+    if host != "polymarket.com" and not host.endswith(".polymarket.com"):
+        return None
+
+    segments = [s for s in parts.path.split("/") if s]
+    if "event" not in segments:
+        return None
+    position = segments.index("event")
+    if len(segments) <= position + 1:
+        return None
+    return segments[position + 1]
+
+
 # Works better than embedded search but inconsistent
 def ddg_search_event(query : str, depth : int = 10, max_results : int = 1) -> Event | list[Event]: 
     
@@ -86,25 +108,30 @@ def ddg_search_event(query : str, depth : int = 10, max_results : int = 1) -> Ev
 
     with DDGS() as ddgs:
 
-        search_events = [] 
+        search_events = []
+        seen_slugs = set()
 
-        for url in [result["href"] for result in ddgs.text(query + " polymarket event", max_results = depth)]:
-            if re.search(r"event", url):
+        for result in ddgs.text(query + " polymarket event", max_results = depth):
+            slug = _event_slug(result.get("href"))
+            if slug is None or slug in seen_slugs:
+                continue
+            seen_slugs.add(slug)
 
-                if url == "https://polymarket.com/event":
-                    continue
+            try:
+                event = Event(slug = slug)
+            except PolymarketNotFoundError:
+                # Stale or mangled link; one bad hit shouldn't sink the search.
+                continue
+            search_events.append(event)
 
-                event = Event(slug = url.split("/")[-1])
-                search_events.append(event)
+            if len(search_events) == max_results:
+                if max_results == 1:
+                    return event
+                return search_events
 
-                if len(search_events) == max_results:
-                    if max_results == 1:
-                        return event
-                    return search_events
-                
     if len(search_events) != 0:
         return search_events
-    
+
     return None
 
 # Embedded searches through cached embedded list of Events.
@@ -127,12 +154,16 @@ def embedded_search_event(query : str, results : int = 1, data : pd.DataFrame | 
             raise EmbeddingError("Cannot do embedded search while caching is disabled. "
                                  "Set pyolymarket.config.caching = True, or pass a "
                                  "DataFrame as data=")
-        from .cacher import events, events_vecs
+        try:
+            from .cacher import events, events_vecs
+        except ImportError as e:
+            raise ImportError(
+                "Searching the cached catalogue needs the cache dependencies. "
+                "Install them with: pip install pyolymarket[cache]") from e
         if events is None or events_vecs is None:
             raise EmbeddingError(
                 "No embedding cache available. Build one with "
-                "pyolymarket.cacher.cache(); note that cache level \"csv\" does "
-                "not write the vector file embedded search needs.")
+                "pyolymarket.cacher.cache().")
     else:
         missing = {"id", "embeddedVector"} - set(data.columns)
         if missing:
@@ -141,7 +172,12 @@ def embedded_search_event(query : str, results : int = 1, data : pd.DataFrame | 
                 "A custom embedding table needs an 'id' column and an "
                 "'embeddedVector' column of equal-length vectors.")
         events = data
-        events_vecs = np.stack(data["embeddedVector"].to_numpy())
+        if len(data) != 0:
+            events_vecs = np.stack(data["embeddedVector"].to_numpy())
+
+    if len(events) == 0:
+        raise EmbeddingError("There are no embedded events to search: the "
+                             "embedding table is empty.")
 
     if results > len(events):
         results = len(events)

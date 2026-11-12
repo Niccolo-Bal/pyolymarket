@@ -76,8 +76,8 @@ def main():
     print("events seen:", sorted(events["id"]))
     print("event_id joined for every market:", markets["event_id"].notna().all())
     print("no raw events column:", "events" not in markets.columns)
-    print("empty description fell back to full text:",
-          events.loc[events["id"] == "20", "shortenedDesc"].iloc[0] == "")
+    print("empty description fell back to the title:",
+          events.loc[events["id"] == "20", "shortenedDesc"].iloc[0] == "Event 20")
 
     files = sorted(p.name for p in Path(pyoly.config.CACHE_DIR).iterdir())
     print("files:", files)
@@ -96,7 +96,7 @@ def main():
     print("second run rows:", len(cacher.events), "| new embeddings:", embedded)
 
     # Cache levels.
-    for level, expected in (("csv", {".csv"}), ("npy", {".parquet", ".npy"})):
+    for level, expected in (("csv", {".csv", ".npy"}), ("npy", {".parquet", ".npy"})):
         pyoly.config.CACHE_DIR = tempfile.mkdtemp()
         pyoly.config.caching = level
         cacher.events = None

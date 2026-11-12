@@ -1,5 +1,10 @@
 import os
 
+# What cacher writes at each level. The embedding matrix (events_vecs.npy) is
+# written at every level but "off", since nothing can be reloaded without it.
+#   "csv"  events/markets as CSV, readable by eye
+#   "npy"  events/markets as parquet
+#   "on"   both
 CACHE_LEVELS = ("off", "on", "csv", "npy")
 
 

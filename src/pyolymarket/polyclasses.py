@@ -90,6 +90,10 @@ class Event:
         if self._markets is None:
             self._markets = [Market.from_data(m)
                              for m in (self.data.get("markets") or [])]
+            # Nested market payloads don't name their parent event.
+            for market in self._markets:
+                if market.event_id is None:
+                    market.event_id = self.id
         return self._markets
 
     @property
@@ -106,9 +110,12 @@ class Event:
         vec = self._cached_vec() if config.caching else None
 
         if vec is None:
-            vec = emb.embed((self.data.get("description") or "").split("\n")[0])
-            if not vec:
-                vec = emb.embed(self.data.get("description") or "")
+            # Same fallback chain the cacher uses: first line of the
+            # description, the whole description, the title, then the slug.
+            description = (self.data.get("description") or "").strip()
+            text = (description.split("\n")[0].strip() or description
+                    or (self.title or "").strip() or str(self.slug or ""))
+            vec = emb.embed(text)
         if in_place:
             self.vec = vec
         return vec
@@ -153,12 +160,20 @@ class Market:
             self.id = id
             self.slug = None
             self.data = _client.get_json("markets/" + str(id))
-            self.slug = self.data["slug"]
+            try:
+                self.slug = self.data["slug"]
+            except KeyError as e:
+                raise PolymarketAPIError(
+                    "Polymarket returned no slug in market initialization", obj = self) from e
         elif slug:
             self.slug = slug
             self.id = None
             self.data = _client.get_json("markets/slug/" + str(slug))
-            self.id = self.data["id"]
+            try:
+                self.id = self.data["id"]
+            except KeyError as e:
+                raise PolymarketAPIError(
+                    "Polymarket returned no id in market initialization", obj = self) from e
         else:
             raise ValueError("Market instance must be initialized with either an id or slug")
         self.data_timestamp = datetime.now()
@@ -184,10 +199,14 @@ class Market:
 
     @property 
     def resolved(self) -> bool:
+        """Whether the market has closed. Gamma's `closed` flag is the source
+        of truth: a market can resolve before its end date, or keep trading
+        past it. The end date is only a fallback for payloads without the flag."""
+        closed = self.data.get("closed")
+        if closed is not None:
+            return bool(closed)
         end = _parse_time(self.data.get("endDate"))
-        if end is None:
-            return bool(self.data.get("closed"))
-        return datetime.now(timezone.utc) > end
+        return end is not None and datetime.now(timezone.utc) > end
     
     @property
     def resolution(self):

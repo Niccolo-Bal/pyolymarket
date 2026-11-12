@@ -18,7 +18,7 @@ def _openai() -> OpenAI:
     settings = (config.embedding_base_url, config.emb_api_key)
     if _OpenAIClient is None or _client_settings != settings:
         base_url, emb_api_key = settings
-        _OpenAIClient = OpenAI(emb_api_key = emb_api_key, base_url = base_url)
+        _OpenAIClient = OpenAI(api_key = emb_api_key, base_url = base_url)
         _client_settings = settings
     return _OpenAIClient
 

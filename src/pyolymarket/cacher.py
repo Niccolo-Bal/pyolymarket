@@ -1,4 +1,4 @@
-import asyncio, os, logging
+import asyncio, os, logging, time
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -6,14 +6,7 @@ from datetime import datetime
 from . import _client
 from . import embedding_logic as emb
 from .config import config
-
-# On-disk catalogue of open events and markets, plus the event embeddings that
-# utils.embedded_search_event ranks against.
-#
-# Layout under config.CACHE_DIR:
-#   events.parquet / events.csv      one row per event, with its embeddedVector
-#   markets.parquet / markets.csv    one row per market, joined to its event
-#   events_vecs.npy                  the embedding matrix, row-aligned to events
+from .custom_exceptions import PolymarketAPIError
 
 MARKET_COLUMNS = ["id", "question", "slug", "conditionId", "clobTokenIds", "events"]
 EVENT_COLUMNS = ["id", "slug", "title", "description", "endDate", "seriesSlug"]
@@ -30,8 +23,8 @@ def _cache_path(name: str) -> str:
 
 
 def _write_frame(frame: pd.DataFrame, name: str) -> None:
-    """Honour the configured cache level. CSV is for eyeballing, parquet is what
-    gets read back, so "csv" alone is inspection-only."""
+    """Honour the configured cache level: CSV for eyeballing, parquet for
+    compactness. Either one can be read back by _read_frame."""
     level = config.cache_level
     if level == "off":
         return
@@ -42,18 +35,62 @@ def _write_frame(frame: pd.DataFrame, name: str) -> None:
 
 
 def _read_frame(name: str) -> pd.DataFrame:
+    """Read whichever copy was written most recently, so a parquet file left
+    over from an earlier cache level can't shadow a newer CSV."""
     parquet = _cache_path(name + ".parquet")
-    if os.path.exists(parquet):
+    csv = _cache_path(name + ".csv")
+    found = [p for p in (parquet, csv) if os.path.exists(p)]
+    if not found:
+        raise FileNotFoundError(f"No cached {name} table in {config.CACHE_DIR}")
+
+    newest = max(found, key = os.path.getmtime)
+    if newest == parquet:
         return pd.read_parquet(parquet)
-    return pd.read_csv(_cache_path(name + ".csv"))
+    # Ids are strings everywhere else; don't let CSV parsing turn them into ints.
+    return pd.read_csv(csv, dtype = {"id": str, "market_id": str, "event_id": str})
+
+
+def _configure_logging() -> None:
+    """config.log is an explicit opt-in, so make it visible even when the
+    application hasn't set up logging itself."""
+    if not config.log:
+        return
+    logger.setLevel(logging.INFO)
+    if not logging.getLogger().handlers and not any(
+            type(h) is logging.StreamHandler for h in logger.handlers):
+        logger.addHandler(logging.StreamHandler())
+
+
+def _embed_text(frame: pd.DataFrame) -> pd.Series:
+    """The text embedded for each event: first line of its description, then
+    the whole description, then the title, then the slug. Never null; empty
+    only when an event has none of them."""
+    def clean(column: str) -> pd.Series:
+        if column not in frame:
+            return pd.Series("", index = frame.index, dtype = object)
+        return frame[column].fillna("").astype(str).str.strip()
+
+    description = clean("description")
+    text = description.str.split("\n").str[0].str.strip()
+    for fallback in (description, clean("title"), clean("slug")):
+        text = text.where(text != "", fallback)
+    return text
+
+
+def _known_vectors() -> dict:
+    """Embeddings already paid for, keyed by the text that produced them."""
+    if events is None or not {"shortenedDesc", "embeddedVector"} <= set(events.columns):
+        return {}
+    return {text: vec for text, vec in zip(events["shortenedDesc"],
+                                           events["embeddedVector"])
+            if isinstance(text, str) and text and vec is not None}
 
 
 def cache():
 
     global events, events_vecs, markets
 
-    if config.log:
-        logger.setLevel(logging.INFO)
+    _configure_logging()
 
     os.makedirs(config.CACHE_DIR, exist_ok = True)
 
@@ -84,42 +121,56 @@ def cache():
 
                 bar(100)   
 
+    if not pulled_markets:
+        logger.warning(" Gamma returned no markets. Leaving the existing cache untouched.")
+        return
 
     markets_df = pd.DataFrame(pulled_markets).reindex(columns = MARKET_COLUMNS)
-    pulled_events_df = pd.json_normalize(markets_df["events"].str[0]).reindex(
-        columns = EVENT_COLUMNS)
+
+    # A market can arrive without a parent event. Give it an empty one so the
+    # event rows stay aligned with the market rows for the join below.
+    first_events = [evs[0] if isinstance(evs, list) and evs else {}
+                    for evs in markets_df["events"]]
+    pulled_events_df = pd.json_normalize(first_events).reindex(columns = EVENT_COLUMNS)
+
     markets_df = markets_df.join(pulled_events_df["id"], rsuffix = ".event")
     markets_df = markets_df.rename(columns = {"id" : "market_id",
                                               "id.event" : "event_id"})
-    pulled_events_df.drop_duplicates(subset = ["id"], inplace = True)
+    pulled_events_df = (pulled_events_df.dropna(subset = ["id"])
+                        .drop_duplicates(subset = ["id"])
+                        .reset_index(drop = True))
 
     ## Events Logic
-    # Compare to already cached events, remove old and embed new
-    cached_events = events
-    if cached_events is None:
-        cached_events = pd.DataFrame(columns = ["id"])
-    
-    cached_events = pd.merge(cached_events, pulled_events_df["id"], on = "id", how = "inner")
-    new_events = pulled_events_df[~pulled_events_df["id"].isin(cached_events["id"])].copy()
+    # The catalogue is rebuilt from the fresh pull every time, so titles, end
+    # dates and descriptions never go stale. Only the embeddings are carried
+    # over: a vector is reused whenever its text has been embedded before,
+    # whichever event it belonged to (ex, recurring crypto up-down markets).
+    pulled_events_df["shortenedDesc"] = _embed_text(pulled_events_df)
 
-    # Embed new events by first line of description; use same vector for same first-line description (ex, crypto up-down markets)
-    new_events["shortenedDesc"] = new_events["description"].str.split("\n").str[0]
-    new_events["shortenedDesc"] = np.where(new_events["shortenedDesc"] == "", new_events["description"], new_events["shortenedDesc"])
-    new_events["uniqueDescription"] = ~new_events.duplicated(subset = ["shortenedDesc"])
+    unembeddable = pulled_events_df["shortenedDesc"] == ""
+    if unembeddable.any():
+        logger.warning(" Skipping %s event(s) with no description, title or slug to embed.",
+                       int(unembeddable.sum()))
+        pulled_events_df = pulled_events_df[~unembeddable].reset_index(drop = True)
 
-    embedding_df = new_events[["shortenedDesc"]].drop_duplicates()
-    embedding_list = embedding_df["shortenedDesc"].to_list()
+    pulled_events_df["uniqueDescription"] = ~pulled_events_df.duplicated(
+        subset = ["shortenedDesc"])
+
+    vectors = _known_vectors()
+    embedding_list = [text for text in pulled_events_df["shortenedDesc"].unique()
+                      if text not in vectors]
 
     if embedding_list:
         vectorized_list, tokens = emb.embed_list(embedding_list)
         logger.info(f" Succesfully embeded new events. Tokens used: {tokens}")
-        embedding_df["embeddedVector"] = vectorized_list
-        new_events = pd.merge(new_events, embedding_df, on = "shortenedDesc")
+        vectors.update(zip(embedding_list, vectorized_list))
     else:
         # Nothing new since the last run, so skip the embedding request entirely.
         logger.info(" No new events to embed.")
 
-    final_events_df = pd.concat([cached_events, new_events], ignore_index = True)
+    pulled_events_df["embeddedVector"] = [vectors[text] for text
+                                          in pulled_events_df["shortenedDesc"]]
+    final_events_df = pulled_events_df
 
     ## Markets Logic
     # Mirrors the events flow: keep only markets still in the pull, deduped on
@@ -131,10 +182,16 @@ def cache():
     _write_frame(markets_df, "markets")
     markets = markets_df
 
-    events_vecs = np.stack(final_events_df["embeddedVector"].to_numpy())
+    if len(final_events_df):
+        events_vecs = np.stack(final_events_df["embeddedVector"].to_numpy())
+    else:
+        events_vecs = np.empty((0, 0))
     events = final_events_df
-    _write_frame(events, "events")
-    if config.cache_level in ("on", "npy"):
+
+    # On disk the vectors live only in events_vecs.npy, row-aligned to the
+    # events table. load() reattaches them as the embeddedVector column.
+    _write_frame(events.drop(columns = ["embeddedVector"]), "events")
+    if config.cache_level != "off":
         np.save(_cache_path("events_vecs.npy"), events_vecs)
 
     logger.info(" Succesfully refreshed markets and events.")
@@ -142,27 +199,45 @@ def cache():
 
 async def cacheLoop():
     while True:
-        cache()
+        # cache() blocks for as long as the pull takes, so keep it off the event loop.
+        await asyncio.to_thread(cache)
         await asyncio.sleep(REFRESH_SECONDS)
 
 
 def load():
     """Read the cache off disk into the module-level frames. Builds it first if
-    it isn't there yet."""
+    it isn't there yet, and refreshes it if it is older than REFRESH_SECONDS."""
     global events, events_vecs, markets
 
+    vecs_path = _cache_path("events_vecs.npy")
+
     try:
-        events = _read_frame("events")
-        events_vecs = np.load(_cache_path("events_vecs.npy"))
+        frame = _read_frame("events")
+        vecs = np.load(vecs_path)
     except (FileNotFoundError, OSError):
         logger.info(" Cache not found at %s. Refreshing markets.", config.CACHE_DIR)
         cache()
         return
 
+    if len(frame) != len(vecs):
+        logger.warning(" Cached events and vectors are out of step. Rebuilding the cache.")
+        cache()
+        return
+
+    frame["embeddedVector"] = list(vecs)
+    events, events_vecs = frame, vecs
+
     try:
         markets = _read_frame("markets")
     except (FileNotFoundError, OSError):
         markets = None
+
+    if time.time() - os.path.getmtime(vecs_path) > REFRESH_SECONDS:
+        logger.info(" Cache is older than %s seconds. Refreshing markets.", REFRESH_SECONDS)
+        try:
+            cache()
+        except PolymarketAPIError as e:
+            logger.warning(" Could not refresh the cache (%s). Using the stale copy.", e)
 
 
 def alive_bar(*args, **kwargs):

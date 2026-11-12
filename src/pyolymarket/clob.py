@@ -126,20 +126,9 @@ def _check_side(side: str) -> str:
 ###### Price history
 
 
-def price_history(token_id: str,
-                  interval: str | None = None,
-                  start_ts: int | None = None,
-                  end_ts: int | None = None,
-                  fidelity: int | None = None,
-                  as_frame: bool = False,
-                  sess: requests.Session | None = None):
-    """Price timeseries for one outcome token.
+def price_history(token_id: str, interval: str | None = None, start_ts: int | None = None, end_ts: int | None = None,
+                  fidelity: int | None = None, as_frame: bool = False, sess: requests.Session | None = None):
 
-    Pass either `interval` or both `start_ts` and `end_ts` (unix seconds); the
-    API rejects a request carrying neither. `fidelity` is the resolution in
-    minutes. Returns a list of {"t": unix_seconds, "p": price} dicts, or a
-    time-indexed DataFrame when `as_frame` is set.
-    """
     if interval is None and (start_ts is None or end_ts is None):
         raise ValueError("price_history needs either interval, or both "
                          "start_ts and end_ts")
@@ -164,17 +153,9 @@ def price_history(token_id: str,
     return _history_frame(history)
 
 
-def batch_price_history(token_ids: list[str],
-                        interval: str | None = None,
-                        start_ts: int | None = None,
-                        end_ts: int | None = None,
-                        fidelity: int | None = None,
-                        sess: requests.Session | None = None) -> dict[str, list]:
-    """Price history for up to 20 tokens, keyed by token id.
-
-    Note the parameter names are snake_case on this endpoint but camelCase on
-    the single-token GET; that asymmetry is the API's, not a typo.
-    """
+def batch_price_history(token_ids: list[str], interval: str | None = None, start_ts: int | None = None, end_ts: int | None = None,
+                        fidelity: int | None = None, sess: requests.Session | None = None) -> dict[str, list]:
+    
     if len(token_ids) > 20:
         raise ValueError(f"batch_price_history accepts at most 20 tokens, "
                          f"got {len(token_ids)}")
@@ -208,15 +189,11 @@ def _history_frame(history: list[dict[str, Any]]):
 
 
 def market(condition_id: str, sess: requests.Session | None = None) -> dict[str, Any]:
-    """CLOB view of a market, including its `tokens` list of
-    {token_id, outcome, price, winner}."""
     return _get("markets/" + str(condition_id), sess = sess)
 
 
 def markets(next_cursor: str | None = None,
             sess: requests.Session | None = None) -> dict[str, Any]:
-    """One page of markets. Follow `next_cursor` until it comes back as "LTE=",
-    which marks the end of the list."""
     params = {"next_cursor": next_cursor} if next_cursor else None
     return _get("markets", params, sess = sess)
 
@@ -304,5 +281,13 @@ def create_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
     """Mint fresh L2 credentials for a wallet. Needs L1 (wallet) signing."""
     from . import _auth
 
-    return _client.post_json("auth/api-key", base = clob_base, sess = sess,
-                             headers = _auth.l1_headers(nonce = nonce))
+    headers = _auth.l1_headers(nonce = nonce)
+    if sess is not None:
+        return _client.post_json("auth/api-key", base = clob_base, sess = sess,
+                                 headers = headers)
+
+    # Minting a key is not a read, so it must not go through the shared
+    # session, whose retry policy replays POSTs.
+    with _client.new_session(retries = 0) as one_shot:
+        return _client.post_json("auth/api-key", base = clob_base,
+                                 sess = one_shot, headers = headers)
