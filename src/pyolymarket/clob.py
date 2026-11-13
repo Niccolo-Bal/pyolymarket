@@ -288,7 +288,6 @@ def order_scoring(order_id: str, sess: requests.Session | None = None) -> Any:
 
 
 def derive_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
-    """Re-derive the L2 credentials for a wallet. Needs L1 (wallet) signing."""
     from . import _auth
 
     return _client.get_json("auth/derive-api-key", base = clob_base, sess = sess,
@@ -296,7 +295,6 @@ def derive_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
 
 
 def create_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
-    """Mint fresh L2 credentials for a wallet. Needs L1 (wallet) signing."""
     from . import _auth
 
     headers = _auth.l1_headers(nonce = nonce)
