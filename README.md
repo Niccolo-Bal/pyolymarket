@@ -62,26 +62,7 @@ pytest
 ```
 
 ## Version
-
 Currently in `v0.2.0`.
-
-Most recent changes:
-- The search helpers always return a list (breaking: `results = 1` used to return a bare `Event`)
-- The cache lives in a `cacher.Cache` class and is no longer loaded at import
-- More properties on `Event` and `Market` (volume, liquidity, tags, best bid/ask, ...)
-- Supports Python 3.10+
-- Test suite and bug fixes
-
-### Releasing
-
-The version number is read from the git tag, so a release is a tag:
-
-```shell
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-Pushing a `v*` tag runs `.github/workflows/publish.yml`, which tests, builds and uploads that exact commit to PyPI.
 
 ## Documentation
 
