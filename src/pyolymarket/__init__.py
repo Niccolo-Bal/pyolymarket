@@ -14,13 +14,7 @@ try:
     from importlib.metadata import version as _version
     __version__ = _version("pyolymarket")
 except Exception:
-    __version__ = "0.0.0+unknown"
-
-# The Gamma and CLOB surfaces need nothing but requests. Embeddings, the disk
-# cache and DuckDuckGo search each pull a heavier optional dependency, so they
-# are resolved on first access instead of at import. That keeps `import
-# pyolymarket` cheap and, in the cacher's case, free of side effects: importing
-# it can kick off a full catalogue build.
+    __version__ = "0.0.0+Unknown"
 
 _LAZY_MODULES = {"clob", "cacher", "utils", "embedding_logic"}
 

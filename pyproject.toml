@@ -1,13 +1,30 @@
 [build-system]
-requires = ["setuptools>=48", "setuptools_scm[toml]>=6.3.1"]
+requires = ["setuptools>=77", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyolymarket"
 description = "Python wrapper for the Polymarket Gamma and CLOB APIs, with native and embedding-based event search"
 readme = "README.md"
-license = {file = "LICENSE"}
-requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [{name = "Niccolo-Bal"}]
+requires-python = ">=3.10"
+keywords = ["polymarket", "prediction markets", "gamma", "clob", "embeddings"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+]
+# The version comes from the git tag (see [tool.setuptools_scm]). A build made
+# on the commit tagged v0.2.0 is 0.2.0; a build made anywhere else is a .dev
+# version, which pip skips by default. Only publish builds of tagged commits.
 dynamic = ["version"]
 dependencies = [
     "requests",
@@ -21,6 +38,7 @@ cache = [
   "pandas",
   "pyarrow",
   "alive-progress",
+  "openai",
 ]
 
 embeddings = [
@@ -46,19 +64,23 @@ docs = [
 ]
 
 tests = [
-  "pytest>=8,<9",
+  "pytest>=8",
   "pytest-sugar>=0.9.6",
 ]
 
 [project.urls]
-Documentation = "https://github.com/Niccolo-Bal/pyolymarket"
-Issues = "https://github.com/Niccolo-Bal/pyolymarket"
+Homepage = "https://github.com/Niccolo-Bal/pyolymarket"
 Source = "https://github.com/Niccolo-Bal/pyolymarket"
+Issues = "https://github.com/Niccolo-Bal/pyolymarket/issues"
 
 [tool.setuptools.packages.find]
 include = ["pyolymarket", "pyolymarket.*"]
 where = ["src"]
 namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.setuptools_scm]
 version_scheme = "no-guess-dev"

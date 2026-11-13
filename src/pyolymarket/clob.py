@@ -86,22 +86,26 @@ def prices(pairs: list[tuple[str, Side]],
 
 
 def midpoint(token_id: str, sess: requests.Session | None = None) -> float:
+    """Midpoint between the best bid and best ask."""
     payload = _get("midpoint", {"token_id": str(token_id)}, sess = sess)
     return float(payload["mid"])
 
 
 def midpoints(token_ids: list[str],
               sess: requests.Session | None = None) -> dict[str, str]:
+    """Midpoints for several tokens in one request, keyed by token id."""
     return _post("midpoints", _token_bodies(token_ids), sess = sess)
 
 
 def spread(token_id: str, sess: requests.Session | None = None) -> float:
+    """Best ask minus best bid."""
     payload = _get("spread", {"token_id": str(token_id)}, sess = sess)
     return float(payload["spread"])
 
 
 def spreads(token_ids: list[str],
             sess: requests.Session | None = None) -> dict[str, str]:
+    """Spreads for several tokens in one request, keyed by token id."""
     return _post("spreads", _token_bodies(token_ids), sess = sess)
 
 
@@ -113,6 +117,7 @@ def last_trade_price(token_id: str,
 
 def last_trade_prices(token_ids: list[str],
                       sess: requests.Session | None = None) -> list[dict[str, Any]]:
+    """Most recent trade for several tokens in one request."""
     return _post("last-trades-prices", _token_bodies(token_ids), sess = sess)
 
 
@@ -126,20 +131,12 @@ def _check_side(side: str) -> str:
 ###### Price history
 
 
-def price_history(token_id: str,
-                  interval: str | None = None,
-                  start_ts: int | None = None,
-                  end_ts: int | None = None,
-                  fidelity: int | None = None,
-                  as_frame: bool = False,
-                  sess: requests.Session | None = None):
-    """Price timeseries for one outcome token.
+def price_history(token_id: str, interval: str | None = None, start_ts: int | None = None, end_ts: int | None = None,
+                  fidelity: int | None = None, as_frame: bool = False, sess: requests.Session | None = None):
+    """Price timeseries for one token. Pass `interval`, or both `start_ts` and
+    `end_ts` (unix seconds). `fidelity` is the resolution in minutes. Returns
+    {"t", "p"} dicts, or a time-indexed DataFrame with as_frame."""
 
-    Pass either `interval` or both `start_ts` and `end_ts` (unix seconds); the
-    API rejects a request carrying neither. `fidelity` is the resolution in
-    minutes. Returns a list of {"t": unix_seconds, "p": price} dicts, or a
-    time-indexed DataFrame when `as_frame` is set.
-    """
     if interval is None and (start_ts is None or end_ts is None):
         raise ValueError("price_history needs either interval, or both "
                          "start_ts and end_ts")
@@ -166,11 +163,8 @@ def price_history(token_id: str,
 
 def batch_price_history(token_ids: list[str], interval: str | None = None, start_ts: int | None = None, end_ts: int | None = None,
                         fidelity: int | None = None, sess: requests.Session | None = None) -> dict[str, list]:
-    """Price history for up to 20 tokens, keyed by token id.
+    """Price history for up to 20 tokens, keyed by token id."""
 
-    Note the parameter names are snake_case on this endpoint but camelCase on
-    the single-token GET; that asymmetry is the API's, not a typo.
-    """
     if len(token_ids) > 20:
         raise ValueError(f"batch_price_history accepts at most 20 tokens, "
                          f"got {len(token_ids)}")
@@ -204,30 +198,31 @@ def _history_frame(history: list[dict[str, Any]]):
 
 
 def market(condition_id: str, sess: requests.Session | None = None) -> dict[str, Any]:
-    """CLOB view of a market, including its `tokens` list of
-    {token_id, outcome, price, winner}."""
+    """The CLOB's view of a market, including its outcome `tokens`."""
     return _get("markets/" + str(condition_id), sess = sess)
 
 
 def markets(next_cursor: str | None = None,
             sess: requests.Session | None = None) -> dict[str, Any]:
-    """One page of markets. Follow `next_cursor` until it comes back as "LTE=",
-    which marks the end of the list."""
+    """One page of markets. Feed `next_cursor` back in until it is "LTE="."""
     params = {"next_cursor": next_cursor} if next_cursor else None
     return _get("markets", params, sess = sess)
 
 
 def market_by_token(token_id: str,
                     sess: requests.Session | None = None) -> dict[str, Any]:
+    """The condition id and token pair a token belongs to."""
     return _get("markets-by-token/" + str(token_id), sess = sess)
 
 
 def tick_size(token_id: str, sess: requests.Session | None = None) -> float:
+    """Smallest price increment the token's book accepts."""
     payload = _get("tick-size", {"token_id": str(token_id)}, sess = sess)
     return float(payload["minimum_tick_size"])
 
 
 def neg_risk(token_id: str, sess: requests.Session | None = None) -> bool:
+    """Whether the token belongs to a negative-risk (multi-outcome) market."""
     payload = _get("neg-risk", {"token_id": str(token_id)}, sess = sess)
     return bool(payload["neg_risk"])
 
@@ -238,6 +233,7 @@ def server_time(sess: requests.Session | None = None) -> int:
 
 
 def ok(sess: requests.Session | None = None) -> bool:
+    """Whether the CLOB is up."""
     try:
         return _get("ok", sess = sess) == "OK"
     except PolymarketAPIError:
@@ -275,7 +271,11 @@ def user_trades(market: str | None = None,
     return _auth_get("data/trades", params or None, sess = sess)
 
 
-def balance_allowance(asset_type: str = "COLLATERAL", token_id: str | None = None, sess: requests.Session | None = None) -> Any:
+def balance_allowance(asset_type: str = "COLLATERAL",
+                      token_id: str | None = None,
+                      sess: requests.Session | None = None) -> Any:
+    """Your balance and allowance for USDC ("COLLATERAL") or one outcome token
+    ("CONDITIONAL", with token_id)."""
     params: dict[str, Any] = {"asset_type": asset_type}
     if token_id is not None:
         params["token_id"] = str(token_id)
@@ -283,6 +283,7 @@ def balance_allowance(asset_type: str = "COLLATERAL", token_id: str | None = Non
 
 
 def order_scoring(order_id: str, sess: requests.Session | None = None) -> Any:
+    """Whether one of your orders is currently earning liquidity rewards."""
     return _auth_get("order-scoring", {"order_id": str(order_id)}, sess = sess)
 
 
@@ -296,5 +297,13 @@ def derive_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
 def create_api_key(nonce: int = 0, sess: requests.Session | None = None) -> Any:
     from . import _auth
 
-    return _client.post_json("auth/api-key", base = clob_base, sess = sess,
-                             headers = _auth.l1_headers(nonce = nonce))
+    headers = _auth.l1_headers(nonce = nonce)
+    if sess is not None:
+        return _client.post_json("auth/api-key", base = clob_base, sess = sess,
+                                 headers = headers)
+
+    # Minting a key is not a read, so it must not go through the shared
+    # session, whose retry policy replays POSTs.
+    with _client.new_session(retries = 0) as one_shot:
+        return _client.post_json("auth/api-key", base = clob_base,
+                                 sess = one_shot, headers = headers)

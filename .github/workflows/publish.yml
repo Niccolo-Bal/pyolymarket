@@ -1,0 +1,81 @@
+name: publish
+
+# Pushing a tag like v0.2.0 tests, builds and uploads that commit to PyPI.
+# The version is read from the tag by setuptools_scm, so the tag is the only
+# place a version number is ever written.
+#
+# One-time setup on PyPI (no API token needed): pyolymarket > Manage >
+# Publishing > add a GitHub trusted publisher with
+#   owner: Niccolo-Bal, repository: pyolymarket,
+#   workflow: publish.yml, environment: pypi
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[all,tests]"
+      - run: python -m pytest
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # setuptools_scm needs the tags to work out the version.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+
+      - name: Build
+        run: python -m build
+
+      - name: Check the built version matches the tag
+        shell: bash
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          ls dist
+          test -f "dist/pyolymarket-${expected}.tar.gz"
+          test -f "dist/pyolymarket-${expected}-py3-none-any.whl"
+
+      - name: Check the metadata renders on PyPI
+        run: python -m twine check --strict dist/*
+
+      - name: Check the wheel installs and imports
+        shell: bash
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/venv/bin/python -c "import pyolymarket; assert pyolymarket.__version__ == '${GITHUB_REF_NAME#v}', pyolymarket.__version__; print(pyolymarket.__version__)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Lets PyPI verify this workflow run instead of using a stored token.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
